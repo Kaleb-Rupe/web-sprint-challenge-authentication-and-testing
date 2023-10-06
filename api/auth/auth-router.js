@@ -1,13 +1,18 @@
+const router = require("express").Router();
+const db = require("../../data/dbConfig");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const router = require("express").Router();
-const Jokes = require("../jokes/jokes-data");
+
+const { checkFormat, checkNameTaken } = require("./auth-middleware");
 
 const { BCRYPT_ROUNDS, JWT_SECRET } = require("../../config");
 
-router.post("/register", (req, res, next) => {
-  res.end("implement register, please!");
-  /*
+router.post(
+  "/register",
+  checkFormat,
+  checkNameTaken,
+  async (req, res, next) => {
+    /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
     DO NOT EXCEED 2^8 ROUNDS OF HASHING!
@@ -32,22 +37,24 @@ router.post("/register", (req, res, next) => {
     4- On FAILED registration due to the `username` being taken,
       the response body should include a string exactly as follows: "username taken".
   */
-  let user = req.body;
+    try {
+      const { username, password } = req.body;
+      const newUser = {
+        username: username,
+        password: await bcrypt.hash(password, BCRYPT_ROUNDS),
+      };
+      const result = await db("users")
+        .insert(newUser)
+        .then(([id]) => db("users").where("id", id).first());
 
-  // bcrypting the password before saving
-  const hash = bcrypt.hashSync(user.password, BCRYPT_ROUNDS);
-  // never save the plain text password in the db
-  user.password = hash;
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
-  Jokes.add(user)
-    .then((saved) => {
-      res.status(201).json({ message: `Great to have you, ${saved.username}` });
-    })
-    .catch(next);
-});
-
-router.post("/login", (req, res) => {
-  res.end("implement login, please!");
+router.post("/login", checkFormat, async (req, res, next) => {
   /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
@@ -71,13 +78,32 @@ router.post("/login", (req, res) => {
     4- On FAILED login due to `username` not existing in the db, or `password` being incorrect,
       the response body should include a string exactly as follows: "invalid credentials".
   */
+  try {
+    const { username, password } = req.body;
+
+    db("users")
+      .where("username", username)
+      .first()
+      .then((user) => {
+        if (user && bcrypt.compareSync(password, user.password)) {
+          const token = buildToken(user);
+          res.status(200).json({
+            message: `welcome, ${username}`,
+            token: token,
+          });
+        } else {
+          next({ status: 401, message: "invalid credentials" });
+        }
+      });
+  } catch (err) {
+    next(err);
+  }
 });
 
 function buildToken(user) {
   const payload = {
     subject: user.id,
     username: user.username,
-    role: user.role,
   };
   const options = {
     expiresIn: "1d",
