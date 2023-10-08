@@ -3,7 +3,7 @@ const db = require("../../data/dbConfig");
 const checkFormat = (req, res, next) => {
   try {
     const { username, password } = req.body;
-    if (username && password) {
+    if (username.trim() && password.trim()) {
       next();
     } else {
       next({ status: 400, message: "username and password required" });
