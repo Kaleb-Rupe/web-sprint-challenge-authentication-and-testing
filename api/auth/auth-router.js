@@ -25,7 +25,11 @@ router.post(
       const [id] = await db("users").insert(newUser);
       newUser.id = id;
 
-      res.status(201).json(newUser);
+      res.status(201).json({
+        id: newUser.id,
+        username: newUser.username,
+        password: newUser.password, // In practice, you should not return the password
+      });
     } catch (err) {
       next(err);
     }
